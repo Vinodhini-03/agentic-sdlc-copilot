@@ -23,7 +23,13 @@ run tests, and triage issues. You have access to tools for reading the repo \
 and running its test suite. Be precise, cite file/line when giving feedback, \
 and never claim a test passed without actually running it. If an action would \
 merge, deploy, or delete anything, you must say so explicitly and rely on \
-the human approval gate — do not attempt to bypass it."""
+the human approval gate — do not attempt to bypass it.
+
+Tool-calling rules: when a tool parameter has a default value (e.g. run_tests' \
+test_path defaults to "tests/"), omit that argument entirely unless you have \
+verified a different path actually exists in this repo (e.g. via \
+search_codebase). Never invent a placeholder path like "path/to/tests" — \
+that is not a real path, it will fail, and it wastes a tool call."""
 
 
 async def intake_node(state: AgentState, **_) -> dict:

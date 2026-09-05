@@ -58,18 +58,43 @@ async def fetch_diff(repo_path: str, base: str = "main", head: str = "HEAD") -> 
 
 
 async def run_tests(repo_path: str, test_path: str = "tests/") -> dict[str, Any]:
-    """Run pytest in the target repo and return a structured pass/fail summary."""
+    """
+    Run pytest in the target repo and return a structured pass/fail summary.
+
+    Defensive validation: smaller/local LLMs sometimes hallucinate a
+    plausible-looking placeholder path (e.g. "path/to/tests") instead of
+    respecting the schema's default or omitting the argument. Rather than
+    trusting the model's input blindly, verify the path exists under
+    repo_path first and fall back to the real default with a warning note
+    if not - this is what a production tool boundary should do regardless
+    of which model is calling it.
+    """
+    from pathlib import Path
+
+    resolved = Path(repo_path) / test_path
+    fallback_used = False
+    if not resolved.exists():
+        fallback_used = True
+        test_path = "tests/"
+        resolved = Path(repo_path) / test_path
+
     result = await asyncio.to_thread(
         _run_subprocess,
         ["python", "-m", "pytest", test_path, "-q", "--tb=short"],
         cwd=repo_path,
     )
-    return {
+    output = {
         "returncode": result.returncode,
         "passed": result.returncode == 0,
         "stdout_tail": result.stdout[-2000:],
         "stderr_tail": result.stderr[-1000:],
     }
+    if fallback_used:
+        output["warning"] = (
+            f"Requested test_path did not exist under repo; fell back to "
+            f"default '{test_path}'."
+        )
+    return output
 
 
 async def search_codebase(repo_path: str, query: str, max_results: int = 8) -> list[dict[str, str]]:
