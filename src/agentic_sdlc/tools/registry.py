@@ -56,7 +56,6 @@ async def fetch_diff(repo_path: str, base: str = "main", head: str = "HEAD") -> 
     )
     return result.stdout or f"(no diff output; stderr: {result.stderr[:500]})"
 
-
 async def run_tests(repo_path: str, test_path: str = "tests/") -> dict[str, Any]:
     """
     Run pytest in the target repo and return a structured pass/fail summary.
@@ -95,6 +94,7 @@ async def run_tests(repo_path: str, test_path: str = "tests/") -> dict[str, Any]
             f"default '{test_path}'."
         )
     return output
+  
 
 
 async def search_codebase(repo_path: str, query: str, max_results: int = 8) -> list[dict[str, str]]:
