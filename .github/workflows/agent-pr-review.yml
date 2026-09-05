@@ -1,0 +1,70 @@
+name: Agent PR Review
+
+# Demonstrates the "AI agent augments SDLC" use case described in the README:
+# on every PR, the agent fetches the diff, runs the test suite, and posts a
+# summary comment. Any action beyond read/comment (e.g. merging) is blocked
+# by the governance gate and requires a human.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  agent-review:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need full history for `git diff` against base
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install package
+        run: pip install -e ".[anthropic]"
+
+      - name: Run agent review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AGENTIC_SDLC_PROVIDER: anthropic
+        run: |
+          python -c "
+          import asyncio, json
+          from agentic_sdlc.governance.guardrails import GovernanceGate
+          from agentic_sdlc.graph.build import build_agent_graph
+          from agentic_sdlc.providers.factory import get_provider
+          from agentic_sdlc.tools.registry import default_registry
+
+          async def main():
+              provider = get_provider()
+              graph = build_agent_graph(provider, default_registry(), GovernanceGate())
+              result = await graph.ainvoke({
+                  'repo_path': '.',
+                  'task': 'review_pr',
+                  'actor_role': 'agent',
+                  'messages': [],
+              })
+              print(result.get('final_output', 'No output.'))
+
+          asyncio.run(main())
+          " | tee agent_review.txt
+
+      - name: Post review as PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('agent_review.txt', 'utf8').slice(0, 60000);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `### 🤖 Agent Review\n\n${body}`,
+            });
